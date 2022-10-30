@@ -1,9 +1,14 @@
 package com.roomescape.server.entity;
 
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
 import javax.persistence.*;
 
 @Entity
 @Table
+@AllArgsConstructor
+@NoArgsConstructor
 public class Store {
     @Id
     @Column(name = "STORE_ID", nullable = false)
