@@ -19,4 +19,12 @@ public class Theme {
     @ManyToOne
     @JoinColumn(name = "STORE_ID")
     private Store store;
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getStoreId() {
+        return store.getId();
+    }
 }
