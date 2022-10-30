@@ -1,13 +1,10 @@
 package com.roomescape.server.entity;
 
-import lombok.ToString;
-
 import javax.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
 @Table
-@ToString
 public class Reservation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

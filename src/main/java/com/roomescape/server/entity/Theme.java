@@ -1,12 +1,9 @@
 package com.roomescape.server.entity;
 
-import lombok.ToString;
-
 import javax.persistence.*;
 
 @Entity
 @Table
-@ToString
 public class Theme {
     @Id
     @Column(name = "THEME_ID", nullable = false)
