@@ -2,11 +2,15 @@ package com.roomescape.server.service;
 
 import com.roomescape.server.config.ChromeDriverContext;
 import com.roomescape.server.entity.EscapeCafe;
+import com.roomescape.server.entity.Store;
 import com.roomescape.server.model.StoreDto;
+import com.roomescape.server.model.ThemeDto;
 import com.roomescape.server.repository.StoreRepository;
+import com.roomescape.server.repository.ThemeRepository;
 import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -14,7 +18,6 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -31,30 +34,18 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class CrawlingServiceImpl implements CrawlingService {
-    private static Logger logger = LoggerFactory.getLogger(CrawlingServiceImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(CrawlingServiceImpl.class);
+    private final String nowDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
     private final StoreRepository storeRepository;
+    private final ThemeRepository themeRepository;
 
     private final ChromeDriverContext context;
-    private WebDriver driver;
 
     @Override
     public List<StoreDto> getStore() {
         logger.info("@CrawlingServiceImpl: getStore start");
-        driver = context.chromeDriver();
-        WebDriverWait webDriverWait = new WebDriverWait(driver, Duration.ofSeconds(10));
-        try {
-            Thread.sleep(1000);
-        } catch (Exception e) {
-            logger.info("Error : msg={}, cause={}", e.getMessage(), e.getCause());
-        }
-
-        driver.get(EscapeCafe.KEYESCAPE.getUrl());
-        webDriverWait.until(
-                ExpectedConditions.presenceOfElementLocated(By.cssSelector("#zizum_data"))
-        );
-        List<WebElement> elements = driver.findElements(By.cssSelector("#zizum_data > a"));
-
+        List<WebElement> elements = getElementsByCssSelector("#zizum_data > a");
         List<StoreDto> storeDtoList = new ArrayList<>();
         for (WebElement element : elements) {
             String idInfo = element.getAttribute("href");
@@ -80,16 +71,67 @@ public class CrawlingServiceImpl implements CrawlingService {
         return storeDtoList;
     }
 
+    private List<WebElement> getElementsByCssSelector(String pattern) {
+        WebDriver driver = context.chromeDriver();
+        WebDriverWait webDriverWait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        try {
+            Thread.sleep(1000);
+        } catch (Exception e) {
+            logger.info("Error : msg={}, cause={}", e.getMessage(), e.getCause());
+        }
+
+        driver.get(EscapeCafe.KEYESCAPE.getUrl() + "make");
+        webDriverWait.until(
+                ExpectedConditions.presenceOfElementLocated(By.cssSelector(pattern))
+        );
+        return driver.findElements(By.cssSelector(pattern));
+    }
+
+    @Override
+    public List<ThemeDto> getTheme() {
+        logger.info("@CrawlingServiceImpl: getTheme start");
+        List<Store> storeList = storeRepository.findAll();
+        List<ThemeDto> themeDtoList = new ArrayList<>();
+        for (Store store : storeList) {
+            MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
+            parameters.add("zizum_num", Long.toString(store.getId()));
+            parameters.add("rev_days", nowDate);
+
+            String url = EscapeCafe.KEYESCAPE.getUrl() + "theme";
+            RestTemplate restTemplate = new RestTemplate();
+            restTemplate.getMessageConverters()
+                    .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
+            String res = restTemplate.postForEntity(url, parameters, String.class).getBody();
+            Document doc = Jsoup.parse(res);
+
+            List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("a");
+            for (Element element : elements) {
+                String idInfo = element.attr("href");
+                int firstIdx = idInfo.indexOf("'") + 1;
+                int secondIdx = idInfo.indexOf("'", firstIdx);
+                String themeId = idInfo.substring(firstIdx, secondIdx);
+                ThemeDto themeDto = ThemeDto.builder()
+                        .id(Long.parseLong(themeId))
+                        .name(element.text())
+                        .storeId(store.getId())
+                        .build();
+                themeDtoList.add(themeDto);
+                themeRepository.save(themeDto.toEntity(store));
+            }
+        }
+        return themeDtoList;
+    }
+
     private String getStoreDetail(String storeId) {
+        logger.info("@CrawlingServiceImpl: getStoreDetail start");
         MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
         parameters.add("zizum_num", storeId);
-        parameters.add("rev_days", LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
+        parameters.add("rev_days", nowDate);
 
-        String url = "https://keyescape.co.kr/web/home.php?go=rev.zizum_info";
+        String url = EscapeCafe.KEYESCAPE.getUrl() + "zizum_info";
         RestTemplate restTemplate = new RestTemplate();
         restTemplate.getMessageConverters()
                 .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
-        ResponseEntity<String> res = restTemplate.postForEntity(url, parameters, String.class);
-        return res.getBody();
+        return restTemplate.postForEntity(url, parameters, String.class).getBody();
     }
 }
