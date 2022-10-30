@@ -12,12 +12,6 @@ spring:
     properties:
       hibernate:
       format_sql: true
-    defer-datasource-initialization: true
-
-  sql:
-    init:
-      data-locations: classpath:sql/data.sql
-      mode: always
 
 logging:
   level:

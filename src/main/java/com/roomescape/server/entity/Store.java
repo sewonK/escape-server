@@ -1,12 +1,9 @@
 package com.roomescape.server.entity;
 
-import lombok.ToString;
-
 import javax.persistence.*;
 
 @Entity
 @Table
-@ToString
 public class Store {
     @Id
     @Column(name = "STORE_ID", nullable = false)
@@ -18,7 +15,6 @@ public class Store {
 
     private String tel;
 
-    @ManyToOne
-    @JoinColumn(name = "ESCAPECAFE_ID")
+    @Enumerated(EnumType.STRING)
     private EscapeCafe escapeCafe;
 }

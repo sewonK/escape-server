@@ -1,19 +1,13 @@
 package com.roomescape.server.entity;
 
-import lombok.ToString;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 
-import javax.persistence.*;
-
-@Entity
-@Table
-@ToString
-public class EscapeCafe {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ESCAPECAFE_ID")
-    private Long id;
+@Getter
+@AllArgsConstructor
+public enum EscapeCafe {
+    KEYESCAPE("키이스케이프", "http://www.keyescape.co.kr/web/home.php?go=rev.make");
 
     private String name;
-
     private String url;
 }
