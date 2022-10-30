@@ -48,11 +48,7 @@ public class CrawlingServiceImpl implements CrawlingService {
         List<WebElement> elements = getElementsByCssSelector("#zizum_data > a");
         List<StoreDto> storeDtoList = new ArrayList<>();
         for (WebElement element : elements) {
-            String idInfo = element.getAttribute("href");
-            int firstIdx = idInfo.indexOf("'") + 1;
-            int secondIdx = idInfo.indexOf("'", firstIdx);
-            String storeId = idInfo.substring(firstIdx, secondIdx);
-
+            String storeId = getIdBySubstr(element.getAttribute("href"));
             Document doc = Jsoup.parse(getStoreDetail(storeId));
             String tel = doc.select(".notice").select("dd").get(0).text();
             String location = doc.select(".notice").select("dd").get(3).text();
@@ -93,23 +89,10 @@ public class CrawlingServiceImpl implements CrawlingService {
         List<Store> storeList = storeRepository.findAll();
         List<ThemeDto> themeDtoList = new ArrayList<>();
         for (Store store : storeList) {
-            MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
-            parameters.add("zizum_num", Long.toString(store.getId()));
-            parameters.add("rev_days", nowDate);
-
-            String url = EscapeCafe.KEYESCAPE.getUrl() + "theme";
-            RestTemplate restTemplate = new RestTemplate();
-            restTemplate.getMessageConverters()
-                    .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
-            String res = restTemplate.postForEntity(url, parameters, String.class).getBody();
-            Document doc = Jsoup.parse(res);
-
+            Document doc = Jsoup.parse(getThemeDetail(Long.toString(store.getId())));
             List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("a");
             for (Element element : elements) {
-                String idInfo = element.attr("href");
-                int firstIdx = idInfo.indexOf("'") + 1;
-                int secondIdx = idInfo.indexOf("'", firstIdx);
-                String themeId = idInfo.substring(firstIdx, secondIdx);
+                String themeId = getIdBySubstr(element.attr("href"));
                 ThemeDto themeDto = ThemeDto.builder()
                         .id(Long.parseLong(themeId))
                         .name(element.text())
@@ -122,6 +105,23 @@ public class CrawlingServiceImpl implements CrawlingService {
         return themeDtoList;
     }
 
+    private String getIdBySubstr(String idInfo) {
+        int firstIdx = idInfo.indexOf("'") + 1;
+        int secondIdx = idInfo.indexOf("'", firstIdx);
+        return idInfo.substring(firstIdx, secondIdx);
+    }
+
+    private String getThemeDetail(String storeId) {
+        logger.info("@CrawlingServiceImpl: getThemeDetail start");
+        MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
+        parameters.add("zizum_num", storeId);
+        parameters.add("rev_days", nowDate);
+
+        String url = EscapeCafe.KEYESCAPE.getUrl() + "theme";
+        RestTemplate restTemplate = new RestTemplate();
+        return getResponseBody(parameters, url, restTemplate);
+    }
+
     private String getStoreDetail(String storeId) {
         logger.info("@CrawlingServiceImpl: getStoreDetail start");
         MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
@@ -130,6 +130,10 @@ public class CrawlingServiceImpl implements CrawlingService {
 
         String url = EscapeCafe.KEYESCAPE.getUrl() + "zizum_info";
         RestTemplate restTemplate = new RestTemplate();
+        return getResponseBody(parameters, url, restTemplate);
+    }
+
+    private String getResponseBody(MultiValueMap<String, String> parameters, String url, RestTemplate restTemplate) {
         restTemplate.getMessageConverters()
                 .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
         return restTemplate.postForEntity(url, parameters, String.class).getBody();
