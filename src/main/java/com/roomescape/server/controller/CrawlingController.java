@@ -1,6 +1,7 @@
 package com.roomescape.server.controller;
 
 import com.roomescape.server.model.StoreDto;
+import com.roomescape.server.model.ThemeDto;
 import com.roomescape.server.service.CrawlingService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -26,8 +27,8 @@ public class CrawlingController {
     }
 
     @GetMapping("/theme")
-    public void getTheme() {
-
+    public ResponseEntity<List<ThemeDto>> getTheme() {
+        return new ResponseEntity<>(crawlingService.getTheme(), HttpStatus.CREATED);
     }
 
     @GetMapping("/reservation")

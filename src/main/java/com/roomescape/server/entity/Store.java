@@ -22,4 +22,8 @@ public class Store {
 
     @Enumerated(EnumType.STRING)
     private EscapeCafe escapeCafe;
+
+    public Long getId() {
+        return id;
+    }
 }
