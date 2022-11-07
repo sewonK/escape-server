@@ -40,6 +40,9 @@ import java.util.List;
 @Transactional
 @RequiredArgsConstructor
 public class CrawlingServiceImpl implements CrawlingService {
+    public static final String STORE_ID = "zizum_num";
+    public static final String REV_DATE = "rev_days";
+    public static final String THEME_ID = "theme_num";
     private static final Logger logger = LoggerFactory.getLogger(CrawlingServiceImpl.class);
     private final String nowDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
@@ -156,8 +159,8 @@ public class CrawlingServiceImpl implements CrawlingService {
     private String getThemeDetail(String storeId) {
         logger.debug("@CrawlingServiceImpl: getThemeDetail");
         MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
-        parameters.add("zizum_num", storeId);
-        parameters.add("rev_days", nowDate);
+        parameters.add(STORE_ID, storeId);
+        parameters.add(REV_DATE, nowDate);
 
         String url = EscapeCafe.KEYESCAPE.getUrl() + "theme";
         RestTemplate restTemplate = new RestTemplate();
@@ -167,8 +170,8 @@ public class CrawlingServiceImpl implements CrawlingService {
     private String getStoreDetail(String storeId) {
         logger.debug("@CrawlingServiceImpl: getStoreDetail");
         MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
-        parameters.add("zizum_num", storeId);
-        parameters.add("rev_days", nowDate);
+        parameters.add(STORE_ID, storeId);
+        parameters.add(REV_DATE, nowDate);
 
         String url = EscapeCafe.KEYESCAPE.getUrl() + "zizum_info";
         RestTemplate restTemplate = new RestTemplate();
@@ -179,9 +182,9 @@ public class CrawlingServiceImpl implements CrawlingService {
     private String getTimeDetail(String storeId, String themeId) {
         logger.debug("@CrawlingServiceImpl: getTimeDetail");
         MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
-        parameters.add("zizum_num", storeId);
-        parameters.add("rev_days", nowDate);
-        parameters.add("theme_num", themeId);
+        parameters.add(STORE_ID, storeId);
+        parameters.add(REV_DATE, nowDate);
+        parameters.add(THEME_ID, themeId);
 
         String url = EscapeCafe.KEYESCAPE.getUrl() + "theme_time";
         RestTemplate restTemplate = new RestTemplate();
