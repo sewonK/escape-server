@@ -3,8 +3,11 @@ package com.roomescape.server.service;
 import com.roomescape.server.config.ChromeDriverContext;
 import com.roomescape.server.entity.EscapeCafe;
 import com.roomescape.server.entity.Store;
+import com.roomescape.server.entity.Theme;
+import com.roomescape.server.model.ReservationDto;
 import com.roomescape.server.model.StoreDto;
 import com.roomescape.server.model.ThemeDto;
+import com.roomescape.server.repository.ReservationRepository;
 import com.roomescape.server.repository.StoreRepository;
 import com.roomescape.server.repository.ThemeRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,14 +27,17 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import javax.transaction.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@Transactional
 @RequiredArgsConstructor
 public class CrawlingServiceImpl implements CrawlingService {
     private static final Logger logger = LoggerFactory.getLogger(CrawlingServiceImpl.class);
@@ -39,12 +45,13 @@ public class CrawlingServiceImpl implements CrawlingService {
 
     private final StoreRepository storeRepository;
     private final ThemeRepository themeRepository;
+    private final ReservationRepository reservationRepository;
 
     private final ChromeDriverContext context;
 
     @Override
     public List<StoreDto> getStore() {
-        logger.info("@CrawlingServiceImpl: getStore start");
+        logger.debug("@CrawlingServiceImpl: getStore");
         List<WebElement> elements = getElementsByCssSelector("#zizum_data > a");
         List<StoreDto> storeDtoList = new ArrayList<>();
         for (WebElement element : elements) {
@@ -73,7 +80,7 @@ public class CrawlingServiceImpl implements CrawlingService {
         try {
             Thread.sleep(1000);
         } catch (Exception e) {
-            logger.info("Error : msg={}, cause={}", e.getMessage(), e.getCause());
+            logger.debug("Error : msg={}, cause={}", e.getMessage(), e.getCause());
         }
 
         driver.get(EscapeCafe.KEYESCAPE.getUrl() + "make");
@@ -85,7 +92,7 @@ public class CrawlingServiceImpl implements CrawlingService {
 
     @Override
     public List<ThemeDto> getTheme() {
-        logger.info("@CrawlingServiceImpl: getTheme start");
+        logger.debug("@CrawlingServiceImpl: getTheme");
         List<Store> storeList = storeRepository.findAll();
         List<ThemeDto> themeDtoList = new ArrayList<>();
         for (Store store : storeList) {
@@ -105,6 +112,48 @@ public class CrawlingServiceImpl implements CrawlingService {
         return themeDtoList;
     }
 
+    @Override
+    public List<ReservationDto> getAllReservation() {
+        logger.debug("@CrawlingServiceImpl: getAllReservation");
+        List<Theme> themeList = themeRepository.findAll();
+        List<ReservationDto> reservationDtoList = new ArrayList<>();
+        for (Theme theme : themeList) {
+            Document doc = Jsoup.parse(getTimeDetail(Long.toString(theme.getStoreId()), Long.toString(theme.getId())));
+            List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("li");
+            for (Element element : elements) {
+                String flag = element.attr("class");
+                ReservationDto reservationDto = ReservationDto.builder()
+                        .time(LocalDateTime.parse(nowDate + " " + element.text(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")))
+                        .possibleFlag((flag.equals("possible")))
+                        .themeId(theme.getId())
+                        .build();
+                reservationDto.setId(reservationRepository.save(reservationDto.toEntity(theme)).getId());
+                reservationDtoList.add(reservationDto);
+            }
+        }
+        return reservationDtoList;
+    }
+
+    @Override
+    public List<ReservationDto> getReservationByThemeId(String themeId) {
+        logger.debug("@CrawlingServiceImpl: getReservationByThemeId");
+        Theme theme = themeRepository.findById(Long.parseLong(themeId)).orElseThrow(IllegalArgumentException::new);
+        List<ReservationDto> reservationDtoList = new ArrayList<>();
+        Document doc = Jsoup.parse(getTimeDetail(Long.toString(theme.getStoreId()), Long.toString(theme.getId())));
+        List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("li");
+        for (Element element : elements) {
+            String flag = element.attr("class");
+            ReservationDto reservationDto = ReservationDto.builder()
+                    .time(LocalDateTime.parse(nowDate + " " + element.text(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")))
+                    .possibleFlag((flag.equals("possible")))
+                    .themeId(theme.getId())
+                    .build();
+            reservationDto.setId(reservationRepository.save(reservationDto.toEntity(theme)).getId());
+            reservationDtoList.add(reservationDto);
+        }
+        return reservationDtoList;
+    }
+
     private String getIdBySubstr(String idInfo) {
         int firstIdx = idInfo.indexOf("'") + 1;
         int secondIdx = idInfo.indexOf("'", firstIdx);
@@ -112,7 +161,7 @@ public class CrawlingServiceImpl implements CrawlingService {
     }
 
     private String getThemeDetail(String storeId) {
-        logger.info("@CrawlingServiceImpl: getThemeDetail start");
+        logger.debug("@CrawlingServiceImpl: getThemeDetail");
         MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
         parameters.add("zizum_num", storeId);
         parameters.add("rev_days", nowDate);
@@ -123,12 +172,25 @@ public class CrawlingServiceImpl implements CrawlingService {
     }
 
     private String getStoreDetail(String storeId) {
-        logger.info("@CrawlingServiceImpl: getStoreDetail start");
+        logger.debug("@CrawlingServiceImpl: getStoreDetail");
         MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
         parameters.add("zizum_num", storeId);
         parameters.add("rev_days", nowDate);
 
         String url = EscapeCafe.KEYESCAPE.getUrl() + "zizum_info";
+        RestTemplate restTemplate = new RestTemplate();
+        return getResponseBody(parameters, url, restTemplate);
+    }
+
+
+    private String getTimeDetail(String storeId, String themeId) {
+        logger.debug("@CrawlingServiceImpl: getTimeDetail");
+        MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
+        parameters.add("zizum_num", storeId);
+        parameters.add("rev_days", nowDate);
+        parameters.add("theme_num", themeId);
+
+        String url = EscapeCafe.KEYESCAPE.getUrl() + "theme_time";
         RestTemplate restTemplate = new RestTemplate();
         return getResponseBody(parameters, url, restTemplate);
     }
