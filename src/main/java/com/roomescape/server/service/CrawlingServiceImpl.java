@@ -118,18 +118,7 @@ public class CrawlingServiceImpl implements CrawlingService {
         List<Theme> themeList = themeRepository.findAll();
         List<ReservationDto> reservationDtoList = new ArrayList<>();
         for (Theme theme : themeList) {
-            Document doc = Jsoup.parse(getTimeDetail(Long.toString(theme.getStoreId()), Long.toString(theme.getId())));
-            List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("li");
-            for (Element element : elements) {
-                String flag = element.attr("class");
-                ReservationDto reservationDto = ReservationDto.builder()
-                        .time(LocalDateTime.parse(nowDate + " " + element.text(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")))
-                        .possibleFlag((flag.equals("possible")))
-                        .themeId(theme.getId())
-                        .build();
-                reservationDto.setId(reservationRepository.save(reservationDto.toEntity(theme)).getId());
-                reservationDtoList.add(reservationDto);
-            }
+            makeReservationDtoListByTheme(reservationDtoList, theme);
         }
         return reservationDtoList;
     }
@@ -139,6 +128,11 @@ public class CrawlingServiceImpl implements CrawlingService {
         logger.debug("@CrawlingServiceImpl: getReservationByThemeId");
         Theme theme = themeRepository.findById(Long.parseLong(themeId)).orElseThrow(IllegalArgumentException::new);
         List<ReservationDto> reservationDtoList = new ArrayList<>();
+        makeReservationDtoListByTheme(reservationDtoList, theme);
+        return reservationDtoList;
+    }
+
+    private void makeReservationDtoListByTheme(List<ReservationDto> reservationDtoList, Theme theme) {
         Document doc = Jsoup.parse(getTimeDetail(Long.toString(theme.getStoreId()), Long.toString(theme.getId())));
         List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("li");
         for (Element element : elements) {
@@ -151,7 +145,6 @@ public class CrawlingServiceImpl implements CrawlingService {
             reservationDto.setId(reservationRepository.save(reservationDto.toEntity(theme)).getId());
             reservationDtoList.add(reservationDto);
         }
-        return reservationDtoList;
     }
 
     private String getIdBySubstr(String idInfo) {
