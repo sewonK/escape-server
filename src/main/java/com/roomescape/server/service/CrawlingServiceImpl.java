@@ -3,8 +3,11 @@ package com.roomescape.server.service;
 import com.roomescape.server.config.ChromeDriverContext;
 import com.roomescape.server.entity.EscapeCafe;
 import com.roomescape.server.entity.Store;
+import com.roomescape.server.entity.Theme;
+import com.roomescape.server.model.ReservationDto;
 import com.roomescape.server.model.StoreDto;
 import com.roomescape.server.model.ThemeDto;
+import com.roomescape.server.repository.ReservationRepository;
 import com.roomescape.server.repository.StoreRepository;
 import com.roomescape.server.repository.ThemeRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,35 +27,38 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import javax.transaction.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@Transactional
 @RequiredArgsConstructor
 public class CrawlingServiceImpl implements CrawlingService {
+    public static final String STORE_ID = "zizum_num";
+    public static final String REV_DATE = "rev_days";
+    public static final String THEME_ID = "theme_num";
     private static final Logger logger = LoggerFactory.getLogger(CrawlingServiceImpl.class);
     private final String nowDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
     private final StoreRepository storeRepository;
     private final ThemeRepository themeRepository;
+    private final ReservationRepository reservationRepository;
 
     private final ChromeDriverContext context;
 
     @Override
     public List<StoreDto> getStore() {
-        logger.info("@CrawlingServiceImpl: getStore start");
+        logger.debug("@CrawlingServiceImpl: getStore");
         List<WebElement> elements = getElementsByCssSelector("#zizum_data > a");
         List<StoreDto> storeDtoList = new ArrayList<>();
         for (WebElement element : elements) {
-            String idInfo = element.getAttribute("href");
-            int firstIdx = idInfo.indexOf("'") + 1;
-            int secondIdx = idInfo.indexOf("'", firstIdx);
-            String storeId = idInfo.substring(firstIdx, secondIdx);
-
+            String storeId = getIdBySubstr(element.getAttribute("href"));
             Document doc = Jsoup.parse(getStoreDetail(storeId));
             String tel = doc.select(".notice").select("dd").get(0).text();
             String location = doc.select(".notice").select("dd").get(3).text();
@@ -77,7 +83,7 @@ public class CrawlingServiceImpl implements CrawlingService {
         try {
             Thread.sleep(1000);
         } catch (Exception e) {
-            logger.info("Error : msg={}, cause={}", e.getMessage(), e.getCause());
+            logger.debug("Error : msg={}, cause={}", e.getMessage(), e.getCause());
         }
 
         driver.get(EscapeCafe.KEYESCAPE.getUrl() + "make");
@@ -89,27 +95,14 @@ public class CrawlingServiceImpl implements CrawlingService {
 
     @Override
     public List<ThemeDto> getTheme() {
-        logger.info("@CrawlingServiceImpl: getTheme start");
+        logger.debug("@CrawlingServiceImpl: getTheme");
         List<Store> storeList = storeRepository.findAll();
         List<ThemeDto> themeDtoList = new ArrayList<>();
         for (Store store : storeList) {
-            MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
-            parameters.add("zizum_num", Long.toString(store.getId()));
-            parameters.add("rev_days", nowDate);
-
-            String url = EscapeCafe.KEYESCAPE.getUrl() + "theme";
-            RestTemplate restTemplate = new RestTemplate();
-            restTemplate.getMessageConverters()
-                    .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
-            String res = restTemplate.postForEntity(url, parameters, String.class).getBody();
-            Document doc = Jsoup.parse(res);
-
+            Document doc = Jsoup.parse(getThemeDetail(Long.toString(store.getId())));
             List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("a");
             for (Element element : elements) {
-                String idInfo = element.attr("href");
-                int firstIdx = idInfo.indexOf("'") + 1;
-                int secondIdx = idInfo.indexOf("'", firstIdx);
-                String themeId = idInfo.substring(firstIdx, secondIdx);
+                String themeId = getIdBySubstr(element.attr("href"));
                 ThemeDto themeDto = ThemeDto.builder()
                         .id(Long.parseLong(themeId))
                         .name(element.text())
@@ -122,14 +115,86 @@ public class CrawlingServiceImpl implements CrawlingService {
         return themeDtoList;
     }
 
-    private String getStoreDetail(String storeId) {
-        logger.info("@CrawlingServiceImpl: getStoreDetail start");
+    @Override
+    public List<ReservationDto> getAllReservation(LocalDate fromDate, LocalDate toDate) {
+        logger.debug("@CrawlingServiceImpl: getAllReservation");
+        List<Theme> themeList = themeRepository.findAll();
+        List<ReservationDto> reservationDtoList = new ArrayList<>();
+        for (Theme theme : themeList) {
+            makeReservationDtoListByTheme(reservationDtoList, theme, fromDate, toDate);
+        }
+        return reservationDtoList;
+    }
+
+    @Override
+    public List<ReservationDto> getReservationByThemeId(String themeId, LocalDate fromDate, LocalDate toDate) {
+        logger.debug("@CrawlingServiceImpl: getReservationByThemeId");
+        Theme theme = themeRepository.findById(Long.parseLong(themeId)).orElseThrow(IllegalArgumentException::new);
+        List<ReservationDto> reservationDtoList = new ArrayList<>();
+        makeReservationDtoListByTheme(reservationDtoList, theme, fromDate, toDate);
+        return reservationDtoList;
+    }
+
+    private void makeReservationDtoListByTheme(List<ReservationDto> reservationDtoList, Theme theme, LocalDate fromDate, LocalDate toDate) {
+        for (LocalDate date = fromDate; date.isBefore(toDate); date = date.plusDays(1)) {
+            String revDate = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            Document doc = Jsoup.parse(getTimeDetail(Long.toString(theme.getStoreId()), Long.toString(theme.getId()), revDate));
+            List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("li");
+            for (Element element : elements) {
+                String flag = element.attr("class");
+                ReservationDto reservationDto = ReservationDto.builder()
+                        .time(LocalDateTime.parse(revDate + " " + element.text(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")))
+                        .possibleFlag((flag.equals("possible")))
+                        .themeId(theme.getId())
+                        .build();
+                reservationDto.setId(reservationRepository.save(reservationDto.toEntity(theme)).getId());
+                reservationDtoList.add(reservationDto);
+            }
+        }
+    }
+
+    private String getIdBySubstr(String idInfo) {
+        int firstIdx = idInfo.indexOf("'") + 1;
+        int secondIdx = idInfo.indexOf("'", firstIdx);
+        return idInfo.substring(firstIdx, secondIdx);
+    }
+
+    private String getThemeDetail(String storeId) {
+        logger.debug("@CrawlingServiceImpl: getThemeDetail");
         MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
-        parameters.add("zizum_num", storeId);
-        parameters.add("rev_days", nowDate);
+        parameters.add(STORE_ID, storeId);
+        parameters.add(REV_DATE, nowDate);
+
+        String url = EscapeCafe.KEYESCAPE.getUrl() + "theme";
+        RestTemplate restTemplate = new RestTemplate();
+        return getResponseBody(parameters, url, restTemplate);
+    }
+
+    private String getStoreDetail(String storeId) {
+        logger.debug("@CrawlingServiceImpl: getStoreDetail");
+        MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
+        parameters.add(STORE_ID, storeId);
+        parameters.add(REV_DATE, nowDate);
 
         String url = EscapeCafe.KEYESCAPE.getUrl() + "zizum_info";
         RestTemplate restTemplate = new RestTemplate();
+        return getResponseBody(parameters, url, restTemplate);
+    }
+
+
+    private String getTimeDetail(String storeId, String themeId, String revDate) {
+        logger.debug("@CrawlingServiceImpl: getTimeDetail");
+        MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
+        parameters.add(STORE_ID, storeId);
+        parameters.add(REV_DATE, revDate);
+        parameters.add(THEME_ID, themeId);
+
+        String url = EscapeCafe.KEYESCAPE.getUrl() + "theme_time";
+        RestTemplate restTemplate = new RestTemplate();
+        return getResponseBody(parameters, url, restTemplate);
+    }
+
+    private String getResponseBody(MultiValueMap<String, String> parameters, String url, RestTemplate restTemplate) {
         restTemplate.getMessageConverters()
                 .add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
         return restTemplate.postForEntity(url, parameters, String.class).getBody();

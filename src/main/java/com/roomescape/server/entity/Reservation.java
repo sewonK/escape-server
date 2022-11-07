@@ -1,10 +1,15 @@
 package com.roomescape.server.entity;
 
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
+
 import javax.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
 @Table
+@AllArgsConstructor
+@NoArgsConstructor
 public class Reservation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -18,4 +23,8 @@ public class Reservation {
     @ManyToOne
     @JoinColumn(name = "THEME_ID")
     private Theme theme;
+
+    public Long getId() {
+        return id;
+    }
 }
