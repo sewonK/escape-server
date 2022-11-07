@@ -116,37 +116,40 @@ public class CrawlingServiceImpl implements CrawlingService {
     }
 
     @Override
-    public List<ReservationDto> getAllReservation() {
+    public List<ReservationDto> getAllReservation(LocalDate fromDate, LocalDate toDate) {
         logger.debug("@CrawlingServiceImpl: getAllReservation");
         List<Theme> themeList = themeRepository.findAll();
         List<ReservationDto> reservationDtoList = new ArrayList<>();
         for (Theme theme : themeList) {
-            makeReservationDtoListByTheme(reservationDtoList, theme);
+            makeReservationDtoListByTheme(reservationDtoList, theme, fromDate, toDate);
         }
         return reservationDtoList;
     }
 
     @Override
-    public List<ReservationDto> getReservationByThemeId(String themeId) {
+    public List<ReservationDto> getReservationByThemeId(String themeId, LocalDate fromDate, LocalDate toDate) {
         logger.debug("@CrawlingServiceImpl: getReservationByThemeId");
         Theme theme = themeRepository.findById(Long.parseLong(themeId)).orElseThrow(IllegalArgumentException::new);
         List<ReservationDto> reservationDtoList = new ArrayList<>();
-        makeReservationDtoListByTheme(reservationDtoList, theme);
+        makeReservationDtoListByTheme(reservationDtoList, theme, fromDate, toDate);
         return reservationDtoList;
     }
 
-    private void makeReservationDtoListByTheme(List<ReservationDto> reservationDtoList, Theme theme) {
-        Document doc = Jsoup.parse(getTimeDetail(Long.toString(theme.getStoreId()), Long.toString(theme.getId())));
-        List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("li");
-        for (Element element : elements) {
-            String flag = element.attr("class");
-            ReservationDto reservationDto = ReservationDto.builder()
-                    .time(LocalDateTime.parse(nowDate + " " + element.text(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")))
-                    .possibleFlag((flag.equals("possible")))
-                    .themeId(theme.getId())
-                    .build();
-            reservationDto.setId(reservationRepository.save(reservationDto.toEntity(theme)).getId());
-            reservationDtoList.add(reservationDto);
+    private void makeReservationDtoListByTheme(List<ReservationDto> reservationDtoList, Theme theme, LocalDate fromDate, LocalDate toDate) {
+        for (LocalDate date = fromDate; date.isBefore(toDate); date = date.plusDays(1)) {
+            String revDate = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            Document doc = Jsoup.parse(getTimeDetail(Long.toString(theme.getStoreId()), Long.toString(theme.getId()), revDate));
+            List<Element> elements = doc.select("#contents").select(".s_contents").select(".in_Layer").select("li");
+            for (Element element : elements) {
+                String flag = element.attr("class");
+                ReservationDto reservationDto = ReservationDto.builder()
+                        .time(LocalDateTime.parse(revDate + " " + element.text(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")))
+                        .possibleFlag((flag.equals("possible")))
+                        .themeId(theme.getId())
+                        .build();
+                reservationDto.setId(reservationRepository.save(reservationDto.toEntity(theme)).getId());
+                reservationDtoList.add(reservationDto);
+            }
         }
     }
 
@@ -179,11 +182,11 @@ public class CrawlingServiceImpl implements CrawlingService {
     }
 
 
-    private String getTimeDetail(String storeId, String themeId) {
+    private String getTimeDetail(String storeId, String themeId, String revDate) {
         logger.debug("@CrawlingServiceImpl: getTimeDetail");
         MultiValueMap<String, String> parameters = new LinkedMultiValueMap<>();
         parameters.add(STORE_ID, storeId);
-        parameters.add(REV_DATE, nowDate);
+        parameters.add(REV_DATE, revDate);
         parameters.add(THEME_ID, themeId);
 
         String url = EscapeCafe.KEYESCAPE.getUrl() + "theme_time";

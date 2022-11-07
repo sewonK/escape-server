@@ -7,13 +7,16 @@ import com.roomescape.server.service.CrawlingService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Controller
@@ -36,14 +39,19 @@ public class CrawlingController {
     }
 
     @GetMapping("/reservation")
-    public ResponseEntity<List<ReservationDto>> getAllReservation() {
+    public ResponseEntity<List<ReservationDto>> getAllReservation(
+            @RequestParam("fromDate") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate fromDate,
+            @RequestParam("toDate") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate toDate) {
         logger.debug("@CrawlingController: getAllReservation");
-        return new ResponseEntity<>(crawlingService.getAllReservation(), HttpStatus.CREATED);
+        return new ResponseEntity<>(crawlingService.getAllReservation(fromDate, toDate), HttpStatus.CREATED);
     }
 
     @GetMapping("/reservation/{id}")
-    public ResponseEntity<List<ReservationDto>> getReservationByThemeId(@PathVariable("id") String id) {
+    public ResponseEntity<List<ReservationDto>> getReservationByThemeId(
+            @PathVariable("id") String id,
+            @RequestParam("fromDate") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate fromDate,
+            @RequestParam("toDate") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate toDate) {
         logger.debug("@CrawlingController: getReservationByThemeId");
-        return new ResponseEntity<>(crawlingService.getReservationByThemeId(id), HttpStatus.CREATED);
+        return new ResponseEntity<>(crawlingService.getReservationByThemeId(id, fromDate, toDate), HttpStatus.CREATED);
     }
 }
