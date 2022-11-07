@@ -13,7 +13,8 @@ import org.springframework.context.annotation.Configuration;
 public class ChromeDriverContext {
     private static final Logger logger = LoggerFactory.getLogger(ChromeDriverContext.class);
     private static final String CHROME_DRIVER_ID = "webdriver.chrome.driver";
-    private static final String CHROME_DRIVER_PATH = "C:/Users/Sewon/IdeaProjects/escape-server/chromedriver.exe";
+//    private static final String CHROME_DRIVER_PATH = "C:/Users/Sewon/IdeaProjects/escape-server/chromedriver.exe";
+    private static final String CHROME_DRIVER_PATH = "/Users/sewon/IdeaProjects/escape-server/chromedriver";
 
     @Bean
     public WebDriver chromeDriver() {
